@@ -1,18 +1,10 @@
 import { motion } from "framer-motion";
 
 const languages = [
+  { name: "English", script: "English", speakers: "1.5B+" },
   { name: "Hindi", script: "हिन्दी", speakers: "600M+" },
-  { name: "Bengali", script: "বাংলা", speakers: "230M+" },
   { name: "Tamil", script: "தமிழ்", speakers: "80M+" },
   { name: "Telugu", script: "తెలుగు", speakers: "85M+" },
-  { name: "Marathi", script: "मराठी", speakers: "83M+" },
-  { name: "Gujarati", script: "ગુજરાતી", speakers: "55M+" },
-  { name: "Kannada", script: "ಕನ್ನಡ", speakers: "45M+" },
-  { name: "Malayalam", script: "മലയാളം", speakers: "38M+" },
-  { name: "Punjabi", script: "ਪੰਜਾਬੀ", speakers: "113M+" },
-  { name: "Odia", script: "ଓଡ଼ିଆ", speakers: "35M+" },
-  { name: "Urdu", script: "اردو", speakers: "70M+" },
-  { name: "Assamese", script: "অসমীয়া", speakers: "15M+" },
 ];
 
 const LanguagesSection = () => {
@@ -26,14 +18,14 @@ const LanguagesSection = () => {
           viewport={{ once: true }}
         >
           <h2 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-4">
-            22+ Indian <span className="text-accent">Languages</span>
+            4 Indian <span className="text-accent">Languages</span>
           </h2>
           <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-            Covering over 1.4 billion speakers across the subcontinent.
+            Covering over 1 billion speakers across the subcontinent.
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
           {languages.map((lang, i) => (
             <motion.div
               key={lang.name}
