@@ -232,65 +232,72 @@ async function listUserDocumentsS3(userEmail) {
       return [];
     }
 
-    // Get metadata for each object
-    const { HeadObjectCommand } = await import('@aws-sdk/client-s3');
-    
-    const itemsWithMetadata = await Promise.all(
-      response.Contents.map(async (item) => {
-        const key = item.Key;
-        const fileName = path.basename(key);
-        
-        // Extract timestamp from S3 key (format: users/{email}/{timestamp}_{filename})
-        // Try multiple filename formats:
-        // Format 1: {timestamp}_original_{filename} or {timestamp}_translated_{filename}
-        // Format 2: {timestamp1}_{timestamp2}_original_{filename} (legacy format)
-        let match = fileName.match(/^(\d+)_(original|translated)_(.+)$/);
-        
-        if (!match) {
-          // Try legacy format with two timestamps
-          match = fileName.match(/^(\d+)_\d+_(original|translated)_(.+)$/);
-        }
-        
-        let timestamp = null;
-        let type = null;
-        let originalName = null;
-        
+    // Parse filenames without fetching metadata (faster)
+    const itemsWithMetadata = response.Contents.map((item) => {
+      const key = item.Key;
+      const fileName = path.basename(key);
+      
+      // Try multiple filename formats:
+      // Format 1: {timestamp}_original_{filename} or {timestamp}_translated_{filename}
+      // Format 2: {timestamp1}_{timestamp2}_original_{filename} (legacy format)
+      let match = fileName.match(/^(\d+)_(original|translated)_(.+)$/);
+      let timestamp = null;
+      let type = null;
+      let originalName = null;
+      
+      if (match) {
+        // New format
+        timestamp = parseInt(match[1]);
+        type = match[2];
+        originalName = match[3];
+      } else {
+        // Try legacy format with two timestamps
+        match = fileName.match(/^(\d+)_(\d+)_(original|translated)_(.+)$/);
         if (match) {
-          timestamp = parseInt(match[1]);
-          type = match[2];
-          originalName = match[3];
+          // Use the second timestamp for pairing (the actual translation timestamp)
+          timestamp = parseInt(match[2]);
+          type = match[3];
+          originalName = match[4];
         } else {
           console.log('  - Could not parse filename:', fileName);
         }
-        
-        // Fetch metadata from S3
-        let metadata = {};
-        try {
-          const headCommand = new HeadObjectCommand({
-            Bucket: S3_BUCKET,
-            Key: key,
-          });
-          const headResponse = await s3Client.send(headCommand);
-          metadata = headResponse.Metadata || {};
-        } catch (error) {
-          console.log('  - Could not fetch metadata for:', fileName);
-        }
-        
-        return {
-          key,
-          size: item.Size,
-          lastModified: item.LastModified,
-          timestamp,
-          type,
-          filename: originalName || fileName,
-          metadata,
-        };
-      })
-    );
+      }
+      
+      return {
+        key,
+        size: item.Size,
+        lastModified: item.LastModified,
+        timestamp,
+        type,
+        filename: originalName || fileName,
+        metadata: {}, // Will be populated later if needed
+      };
+    });
     
     const processed = processDocumentListWithMetadata(itemsWithMetadata);
     
     console.log('  - Processed into', processed.length, 'document pairs');
+    
+    // Now fetch metadata only for successfully paired documents (much faster)
+    if (processed.length > 0) {
+      console.log('  - Fetching metadata for paired documents...');
+      const { HeadObjectCommand } = await import('@aws-sdk/client-s3');
+      
+      for (const doc of processed) {
+        try {
+          // Fetch metadata from original file
+          const headCommand = new HeadObjectCommand({
+            Bucket: S3_BUCKET,
+            Key: doc.original.key,
+          });
+          const headResponse = await s3Client.send(headCommand);
+          doc.metadata = headResponse.Metadata || {};
+        } catch (error) {
+          console.log('  - Could not fetch metadata for:', doc.original.key);
+        }
+      }
+      console.log('  - Metadata fetched');
+    }
     
     return processed;
   } catch (error) {
