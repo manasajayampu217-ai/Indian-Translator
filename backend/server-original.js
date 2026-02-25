@@ -15,11 +15,10 @@ import dotenv from 'dotenv';
 import https from 'https';
 import { uploadToS3, getPresignedUrl, listUserDocuments } from './s3Service.js';
 
+dotenv.config();
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Load environment variables from backend/.env
-dotenv.config({ path: path.join(__dirname, '.env') });
 
 // Font cache
 const fontCache = {};
@@ -105,269 +104,6 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'IndianTranslator Backend is running' });
 });
 
-// Get user's translation history (unified format)
-app.get('/api/history/:userEmail', async (req, res) => {
-  try {
-    const { userEmail } = req.params;
-    
-    console.log(`📋 Fetching history for user: ${userEmail}`);
-    
-    const documents = await listUserDocuments(userEmail);
-    
-    console.log(`📋 Found ${documents.length} documents`);
-    if (documents.length > 0) {
-      console.log('Sample document metadata:', documents[0].metadata);
-    }
-    
-    // Convert S3 documents to unified history format
-    const historyItems = documents.map(doc => {
-      const timestamp = doc.timestamp || Date.now();
-      const date = new Date(timestamp).toISOString();
-      
-      const item = {
-        id: `${doc.original.key}_${doc.translated.key}`,
-        timestamp,
-        date,
-        type: doc.metadata?.contentType === 'text' ? 'text' : 'document',
-        fromLang: doc.metadata?.fromlang || doc.metadata?.fromLang || 'en',
-        toLang: doc.metadata?.tolang || doc.metadata?.toLang || 'hi',
-        originalText: doc.metadata?.contentType === 'text' ? doc.original.filename : undefined,
-        translatedText: doc.metadata?.contentType === 'text' ? doc.translated.filename : undefined,
-        originalFileName: doc.metadata?.contentType !== 'text' ? doc.original.filename : undefined,
-        translatedFileName: doc.metadata?.contentType !== 'text' ? doc.translated.filename : undefined,
-        originalSize: doc.original.size,
-        translatedSize: doc.translated.size,
-      };
-      
-      console.log(`  - ${item.originalFileName}: ${item.fromLang} → ${item.toLang}`);
-      
-      return item;
-    });
-    
-    // Sort by timestamp (newest first)
-    historyItems.sort((a, b) => b.timestamp - a.timestamp);
-    
-    res.json({
-      success: true,
-      history: historyItems,
-    });
-  } catch (error) {
-    console.error('History fetch error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch history',
-      message: error.message,
-    });
-  }
-});
-
-// Save text translation to history
-app.post('/api/history/text', async (req, res) => {
-  try {
-    const { userEmail, originalText, translatedText, fromLang, toLang } = req.body;
-    
-    if (!userEmail || !originalText || !translatedText) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: userEmail, originalText, translatedText' 
-      });
-    }
-    
-    console.log('📝 Saving text translation to history...');
-    console.log('User:', userEmail);
-    console.log('Text length:', originalText.length, '→', translatedText.length);
-    
-    const timestamp = Date.now();
-    
-    // Create text files
-    const originalFileName = `${timestamp}_original_text.txt`;
-    const translatedFileName = `${timestamp}_translated_text.txt`;
-    
-    const originalPath = path.join(__dirname, 'uploads', originalFileName);
-    const translatedPath = path.join(__dirname, 'uploads', translatedFileName);
-    
-    // Ensure uploads directory exists
-    if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
-      fs.mkdirSync(path.join(__dirname, 'uploads'));
-    }
-    
-    // Write text to files
-    fs.writeFileSync(originalPath, originalText, 'utf8');
-    fs.writeFileSync(translatedPath, translatedText, 'utf8');
-    
-    // Upload to S3
-    const originalKey = await uploadToS3(
-      originalPath,
-      userEmail,
-      originalFileName,
-      { type: 'original', fromLang, toLang, contentType: 'text' }
-    );
-    
-    const translatedKey = await uploadToS3(
-      translatedPath,
-      userEmail,
-      translatedFileName,
-      { type: 'translated', fromLang, toLang, contentType: 'text' }
-    );
-    
-    // Cleanup temp files
-    fs.unlinkSync(originalPath);
-    fs.unlinkSync(translatedPath);
-    
-    console.log('✅ Text translation saved to S3 history');
-    
-    res.json({
-      success: true,
-      message: 'Text translation saved to history',
-      keys: { originalKey, translatedKey }
-    });
-    
-  } catch (error) {
-    console.error('❌ Save text history error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to save text history',
-      message: error.message
-    });
-  }
-});
-
-// Save document translation to history
-app.post('/api/history/document', upload.fields([
-  { name: 'originalFile', maxCount: 1 },
-  { name: 'translatedFile', maxCount: 1 }
-]), async (req, res) => {
-  try {
-    const { userEmail, fromLang, toLang } = req.body;
-    const originalFile = req.files?.originalFile?.[0];
-    const translatedFile = req.files?.translatedFile?.[0];
-    
-    if (!userEmail || !originalFile || !translatedFile) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: userEmail, originalFile, translatedFile' 
-      });
-    }
-    
-    console.log('📤 Saving document translation to S3 history...');
-    console.log('User:', userEmail);
-    console.log('Original file:', originalFile.originalname);
-    console.log('Translated file:', translatedFile.originalname);
-    
-    const timestamp = Date.now();
-    const originalFileName = `${timestamp}_original_${originalFile.originalname}`;
-    const translatedFileName = `${timestamp}_translated_${originalFile.originalname}`;
-    
-    // Upload both files to S3
-    const originalKey = await uploadToS3(
-      originalFile.path,
-      userEmail,
-      originalFileName,
-      { type: 'original', fromLang, toLang, contentType: 'document' }
-    );
-    
-    const translatedKey = await uploadToS3(
-      translatedFile.path,
-      userEmail,
-      translatedFileName,
-      { type: 'translated', fromLang, toLang, contentType: 'document' }
-    );
-    
-    // Cleanup temp files
-    fs.unlinkSync(originalFile.path);
-    fs.unlinkSync(translatedFile.path);
-    
-    console.log('✅ Document translation saved to S3 history');
-    
-    res.json({
-      success: true,
-      message: 'Document translation saved to history',
-      keys: { originalKey, translatedKey }
-    });
-    
-  } catch (error) {
-    console.error('❌ Save document history error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to save document history',
-      message: error.message
-    });
-  }
-});
-
-// Delete history item
-app.delete('/api/history/:userEmail/:timestamp', async (req, res) => {
-  try {
-    const { userEmail, timestamp } = req.params;
-    
-    console.log(`🗑️ Deleting history item for user: ${userEmail}, timestamp: ${timestamp}`);
-    
-    // Import deleteFromS3 function
-    const { deleteFromS3 } = await import('./s3Service.js');
-    
-    // Delete both original and translated files
-    await deleteFromS3(userEmail, timestamp);
-    
-    console.log('✅ History item deleted successfully');
-    
-    res.json({
-      success: true,
-      message: 'History item deleted successfully'
-    });
-    
-  } catch (error) {
-    console.error('❌ Delete history error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to delete history item',
-      message: error.message
-    });
-  }
-});
-
-// Download file from S3
-app.get('/api/download/:userEmail/:timestamp/:type', async (req, res) => {
-  try {
-    const { userEmail, timestamp, type } = req.params;
-    
-    console.log(`📥 Download request: ${userEmail}, ${timestamp}, ${type}`);
-    
-    // Import getFileFromS3 function
-    const { getFileFromS3 } = await import('./s3Service.js');
-    
-    // Get file from S3
-    const fileData = await getFileFromS3(userEmail, timestamp, type);
-    
-    if (!fileData) {
-      return res.status(404).json({
-        success: false,
-        error: 'File not found'
-      });
-    }
-    
-    // Set headers for download
-    res.setHeader('Content-Type', fileData.contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${fileData.filename}"`);
-    res.setHeader('Content-Length', fileData.body.length);
-    
-    // Send file
-    res.send(fileData.body);
-    
-    console.log('✅ File downloaded successfully');
-    
-  } catch (error) {
-    console.error('❌ Download error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to download file',
-      message: error.message
-    });
-  }
-});
-
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`🚀 IndianTranslator Backend running on port ${PORT}`);
-  console.log(`📝 Health check: http://localhost:${PORT}/health`);
-});
 // Extract text from PDF using AWS Textract
 async function extractTextFromPDF(filePath) {
   try {
@@ -407,7 +143,7 @@ async function extractTextFromPDF(filePath) {
   }
 }
 
-// Translate text using AWS Translate (with batching)
+// Translate text using AWS Translate
 async function translateText(text, sourceLang, targetLang) {
   try {
     const command = new TranslateTextCommand({
@@ -424,28 +160,81 @@ async function translateText(text, sourceLang, targetLang) {
   }
 }
 
-// Batch translate multiple texts at once for better performance
-async function batchTranslateTexts(textBlocks, sourceLang, targetLang) {
-  console.log(`🔄 Translating ${textBlocks.length} text blocks in parallel...`);
-  
-  // Translate all blocks in parallel for speed
-  const translationPromises = textBlocks.map(async (block) => {
-    const translatedText = await translateText(block.text, sourceLang, targetLang);
-    return {
-      ...block,
-      translatedText,
-    };
-  });
-  
-  const results = await Promise.all(translationPromises);
-  console.log('✅ All translations complete');
-  return results;
+// Create PDF with Unicode support using pdf-lib
+async function createTranslatedPDF(originalPdfPath, translatedBlocks, outputPath, targetLang) {
+  try {
+    // Load original PDF
+    const originalPdfBytes = fs.readFileSync(originalPdfPath);
+    const pdfDoc = await PDFDocument.load(originalPdfBytes);
+    
+    // Register fontkit
+    pdfDoc.registerFontkit(fontkit);
+    
+    // Create a new PDF
+    const newPdfDoc = await PDFDocument.create();
+    newPdfDoc.registerFontkit(fontkit);
+    
+    const pages = pdfDoc.getPages();
+    const firstPage = pages[0];
+    const { width, height } = firstPage.getSize();
+    
+    const newPage = newPdfDoc.addPage([width, height]);
+    
+    // Try to load appropriate font for target language
+    let customFont = null;
+    const fontBytes = await getFontForLanguage(targetLang);
+    if (fontBytes) {
+      try {
+        customFont = await newPdfDoc.embedFont(fontBytes);
+      } catch (err) {
+        console.log('⚠️ Failed to embed font:', err.message);
+      }
+    }
+    
+    // Fallback to standard font if custom font fails
+    if (!customFont) {
+      const { StandardFonts } = await import('pdf-lib');
+      customFont = await newPdfDoc.embedFont(StandardFonts.Helvetica);
+    }
+    
+    // Draw translated text
+    for (const block of translatedBlocks) {
+      if (!block.translatedText) continue;
+
+      const x = block.boundingBox.left * width;
+      const y = height - (block.boundingBox.top * height); // PDF coordinates are bottom-up
+      const blockWidth = block.boundingBox.width * width;
+      const fontSize = Math.max(8, Math.min(block.boundingBox.height * height * 0.7, 16));
+
+      try {
+        newPage.drawText(block.translatedText, {
+          x,
+          y,
+          size: fontSize,
+          font: customFont,
+          color: rgb(0, 0, 0),
+          maxWidth: blockWidth,
+        });
+      } catch (err) {
+        console.log('⚠️ Skipping block:', err.message);
+      }
+    }
+
+    // Save PDF
+    const pdfBytes = await newPdfDoc.save();
+    fs.writeFileSync(outputPath, pdfBytes);
+    
+    return outputPath;
+  } catch (error) {
+    console.error('PDF creation error:', error);
+    throw error;
+  }
 }
 
 // Image-based PDF translation - converts PDF to image, translates, converts back
 async function translatePDFViaImages(pdfPath, textBlocks, targetLang, outputPath) {
   try {
-    console.log('📄 Converting PDF to image using ImageMagick (optimized)...');
+    console.log('📄 Converting PDF to image using ImageMagick...');
     
     // Use ImageMagick directly via command line
     const { exec } = await import('child_process');
@@ -454,12 +243,14 @@ async function translatePDFViaImages(pdfPath, textBlocks, targetLang, outputPath
     
     const originalImagePath = path.join(__dirname, 'temp', `page_${Date.now()}.png`);
     
-    // Convert PDF to PNG using ImageMagick with optimized settings
-    // Reduced density from 300 to 200 for faster processing
-    const command = `magick -density 200 "${pdfPath}[0]" -quality 90 "${originalImagePath}"`;
+    // Convert PDF to PNG using ImageMagick
+    const command = `magick -density 300 "${pdfPath}[0]" -quality 100 "${originalImagePath}"`;
     await execPromise(command);
     
-    console.log('✅ PDF converted to image (faster mode)');
+    console.log('✅ PDF converted to image');
+    console.log('🎨 Drawing translated text...');
+    
+    console.log('✅ PDF converted to image');
     console.log('🎨 Drawing translated text...');
     
     // Load the converted image
@@ -564,6 +355,50 @@ async function translatePDFViaImages(pdfPath, textBlocks, targetLang, outputPath
   }
 }
 
+// Get user's document history
+app.get('/api/history/:userEmail', async (req, res) => {
+  try {
+    const { userEmail } = req.params;
+    
+    console.log(`📋 Fetching history for user: ${userEmail}`);
+    
+    const documents = await listUserDocuments(userEmail);
+    
+    // Generate presigned URLs for each document
+    const documentsWithUrls = await Promise.all(
+      documents.map(async (doc) => {
+        const originalUrl = await getPresignedUrl(doc.original.key, 3600);
+        const translatedUrl = await getPresignedUrl(doc.translated.key, 3600);
+        
+        return {
+          ...doc,
+          original: {
+            ...doc.original,
+            url: originalUrl,
+          },
+          translated: {
+            ...doc.translated,
+            url: translatedUrl,
+          },
+        };
+      })
+    );
+    
+    res.json({
+      success: true,
+      count: documentsWithUrls.length,
+      documents: documentsWithUrls,
+    });
+  } catch (error) {
+    console.error('History fetch error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch history',
+      message: error.message,
+    });
+  }
+});
+
 // Main translation endpoint
 app.post('/api/translate-document', upload.single('file'), async (req, res) => {
   try {
@@ -584,9 +419,16 @@ app.post('/api/translate-document', upload.single('file'), async (req, res) => {
     const textBlocks = await extractTextFromPDF(filePath);
     console.log(`Extracted ${textBlocks.length} text blocks`);
 
-    // Step 2: Translate text (using parallel batch translation for speed)
-    console.log('Translating text in parallel...');
-    const translatedBlocks = await batchTranslateTexts(textBlocks, fromLang, toLang);
+    // Step 2: Translate text
+    console.log('Translating text...');
+    const translatedBlocks = [];
+    for (const block of textBlocks) {
+      const translatedText = await translateText(block.text, fromLang, toLang);
+      translatedBlocks.push({
+        ...block,
+        translatedText,
+      });
+    }
     console.log('Translation complete');
 
     // Step 3: Create translated PDF using image-based approach
@@ -601,15 +443,15 @@ app.post('/api/translate-document', upload.single('file'), async (req, res) => {
       try {
         console.log('📤 Uploading to S3 for user:', userEmail);
         const timestamp = Date.now();
-        const originalFileName = `original_${req.file.originalname}`;
-        const translatedFileName = `translated_${req.file.originalname}`;
+        const originalFileName = `${timestamp}_original_${req.file.originalname}`;
+        const translatedFileName = `${timestamp}_translated_${req.file.originalname}`;
         
         console.log('Uploading original file:', originalFileName);
         const originalKey = await uploadToS3(
           filePath,
           userEmail,
           originalFileName,
-          { type: 'original', fromLang, toLang, contentType: 'document', timestamp: timestamp.toString() }
+          { type: 'original', fromLang, toLang }
         );
         console.log('✅ Original uploaded:', originalKey);
         
@@ -618,7 +460,7 @@ app.post('/api/translate-document', upload.single('file'), async (req, res) => {
           outputPath,
           userEmail,
           translatedFileName,
-          { type: 'translated', fromLang, toLang, contentType: 'document', timestamp: timestamp.toString() }
+          { type: 'translated', fromLang, toLang }
         );
         console.log('✅ Translated uploaded:', translatedKey);
         
@@ -647,6 +489,175 @@ app.post('/api/translate-document', upload.single('file'), async (req, res) => {
     console.error('Translation error:', error);
     res.status(500).json({ 
       error: 'Translation failed', 
+      message: error.message 
+    });
+  }
+});
+
+// Save client-side translated documents to S3 history
+app.post('/api/save-to-history', upload.fields([
+  { name: 'originalFile', maxCount: 1 },
+  { name: 'translatedFile', maxCount: 1 }
+]), async (req, res) => {
+  try {
+    const { userEmail, fromLang, toLang } = req.body;
+    const originalFile = req.files.originalFile[0];
+    const translatedFile = req.files.translatedFile[0];
+    
+    if (!userEmail || !originalFile || !translatedFile) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: userEmail, originalFile, translatedFile' 
+      });
+    }
+    
+    console.log('📤 Saving client-side translation to S3 history...');
+    console.log('User:', userEmail);
+    console.log('Original file:', originalFile.originalname);
+    console.log('Translated file:', translatedFile.originalname);
+    
+    const timestamp = Date.now();
+    const originalFileName = `${timestamp}_original_${originalFile.originalname}`;
+    const translatedFileName = `${timestamp}_translated_${originalFile.originalname}`;
+    
+    // Upload both files to S3
+    const originalKey = await uploadToS3(
+      originalFile.path,
+      userEmail,
+      originalFileName,
+      { type: 'original', fromLang, toLang }
+    );
+    
+    const translatedKey = await uploadToS3(
+      translatedFile.path,
+      userEmail,
+      translatedFileName,
+      { type: 'translated', fromLang, toLang }
+    );
+    
+    // Cleanup temp files
+    fs.unlinkSync(originalFile.path);
+    fs.unlinkSync(translatedFile.path);
+    
+    console.log('✅ Client-side translation saved to S3 history');
+    
+    res.json({
+      success: true,
+      message: 'Saved to history',
+      keys: { originalKey, translatedKey }
+    });
+    
+  } catch (error) {
+    console.error('❌ Save to history error:', error);
+    res.status(500).json({
+      error: 'Failed to save to history',
+      message: error.message
+    });
+  }
+});
+
+// Save text translation to history
+app.post('/api/save-text-history', async (req, res) => {
+  try {
+    const { userEmail, originalText, translatedText, fromLang, toLang, provider } = req.body;
+    
+    if (!userEmail || !originalText || !translatedText) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: userEmail, originalText, translatedText' 
+      });
+    }
+    
+    console.log('📝 Saving text translation to history...');
+    console.log('User:', userEmail);
+    console.log('Text length:', originalText.length, '→', translatedText.length);
+    
+    const timestamp = Date.now();
+    
+    // Create text files
+    const originalFileName = `${timestamp}_original_text.txt`;
+    const translatedFileName = `${timestamp}_translated_text.txt`;
+    
+    const originalPath = path.join('uploads', originalFileName);
+    const translatedPath = path.join('uploads', translatedFileName);
+    
+    // Write text to files
+    fs.writeFileSync(originalPath, originalText, 'utf8');
+    fs.writeFileSync(translatedPath, translatedText, 'utf8');
+    
+    // Upload to S3
+    const originalKey = await uploadToS3(
+      originalPath,
+      userEmail,
+      originalFileName,
+      { type: 'original', fromLang, toLang, provider, contentType: 'text' }
+    );
+    
+    const translatedKey = await uploadToS3(
+      translatedPath,
+      userEmail,
+      translatedFileName,
+      { type: 'translated', fromLang, toLang, provider, contentType: 'text' }
+    );
+    
+    // Cleanup temp files
+    fs.unlinkSync(originalPath);
+    fs.unlinkSync(translatedPath);
+    
+    console.log('✅ Text translation saved to S3 history');
+    
+    res.json({
+      success: true,
+      message: 'Text translation saved to history',
+      keys: { originalKey, translatedKey }
+    });
+    
+  } catch (error) {
+    console.error('❌ Save text history error:', error);
+    res.status(500).json({
+      error: 'Failed to save text history',
+      message: error.message
+    });
+  }
+});
+
+// Convert PDF to Word document
+app.post('/api/convert-to-word', upload.single('file'), async (req, res) => {
+  try {
+    const filePath = req.file.path;
+    
+    console.log('\n📄 Converting PDF to Word...');
+    
+    // Extract text from PDF using Textract
+    const textBlocks = await extractTextFromPDF(filePath);
+    console.log(`Extracted ${textBlocks.length} text blocks`);
+    
+    // Create Word document content
+    let wordContent = '';
+    for (const block of textBlocks) {
+      wordContent += block.text + '\n\n';
+    }
+    
+    // For now, create a simple text file with .docx extension
+    // In production, you'd use a library like 'docx' to create proper Word documents
+    const outputPath = path.join(__dirname, 'uploads', `word_${Date.now()}.txt`);
+    fs.writeFileSync(outputPath, wordContent, 'utf8');
+    
+    console.log('✅ Word document created');
+    
+    // Send the file
+    res.download(outputPath, 'translated_document.docx', (err) => {
+      // Cleanup
+      fs.unlinkSync(filePath);
+      fs.unlinkSync(outputPath);
+      
+      if (err) {
+        console.error('Download error:', err);
+      }
+    });
+    
+  } catch (error) {
+    console.error('Word conversion error:', error);
+    res.status(500).json({ 
+      error: 'Word conversion failed', 
       message: error.message 
     });
   }
@@ -865,7 +876,7 @@ app.post('/api/convert-document', upload.single('file'), async (req, res) => {
           const imgWidth = img.width;
           const imgHeight = img.height;
           
-          // Calculate dimensions to fit A4 page
+          // Calculate dimensions to fit A4 page (595x842 points)
           const maxWidth = 595;
           const maxHeight = 842;
           let finalWidth = imgWidth;
@@ -1148,4 +1159,10 @@ app.get('/api/tts', async (req, res) => {
       message: error.message 
     });
   }
+});
+
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`🚀 IndianTranslator Backend running on port ${PORT}`);
+  console.log(`📝 Health check: http://localhost:${PORT}/health`);
 });

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Download, FileText, Calendar, ArrowLeft, Loader2 } from 'lucide-react';
+import { Download, FileText, Calendar, ArrowLeft, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { HistoryService, DocumentHistory } from '@/services/historyService';
+import { HistoryService, HistoryItem } from '@/services/historyService';
 import { toast } from 'sonner';
 import { User } from '@/services/authService';
 
@@ -12,18 +12,19 @@ interface HistoryPageProps {
 }
 
 export default function HistoryPage({ user, onBack }: HistoryPageProps) {
-  const [history, setHistory] = useState<DocumentHistory[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadHistory();
-  }, []);
+  }, [user.email]);
 
   const loadHistory = async () => {
     try {
       setIsLoading(true);
-      const documents = await HistoryService.getUserHistory(user.email);
-      setHistory(documents);
+      const items = await HistoryService.getUserHistory(user.email);
+      setHistory(items);
     } catch (error) {
       console.error('Failed to load history:', error);
       toast.error('Failed to load history');
@@ -32,8 +33,29 @@ export default function HistoryPage({ user, onBack }: HistoryPageProps) {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+  const handleDelete = async (item: HistoryItem) => {
+    if (!confirm('Are you sure you want to delete this translation from history?')) {
+      return;
+    }
+
+    try {
+      setDeletingId(item.id);
+      await HistoryService.deleteHistoryItem(user.email, item.timestamp);
+      
+      // Remove from local state
+      setHistory(prev => prev.filter(h => h.id !== item.id));
+      
+      toast.success('Translation deleted from history');
+    } catch (error) {
+      console.error('Failed to delete history item:', error);
+      toast.error('Failed to delete history item');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const formatDate = (timestamp: number) => {
+    const date = new Date(timestamp);
     return date.toLocaleString('en-IN', {
       year: 'numeric',
       month: 'short',
@@ -43,10 +65,51 @@ export default function HistoryPage({ user, onBack }: HistoryPageProps) {
     });
   };
 
-  const formatFileSize = (bytes: number) => {
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return 'N/A';
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  const downloadText = (text: string, filename: string) => {
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadDocument = async (timestamp: number, type: 'original' | 'translated', filename: string) => {
+    try {
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+      const url = `${BACKEND_URL}/api/download/${encodeURIComponent(user.email)}/${timestamp}/${type}`;
+      
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+      
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(downloadUrl);
+      
+      toast.success('File downloaded successfully');
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Failed to download file');
+    }
   };
 
   return (
@@ -87,7 +150,7 @@ export default function HistoryPage({ user, onBack }: HistoryPageProps) {
           </motion.div>
         ) : (
           <div className="space-y-8 max-w-6xl mx-auto">
-            {/* Input Documents Table */}
+            {/* All Translations Table */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -96,10 +159,10 @@ export default function HistoryPage({ user, onBack }: HistoryPageProps) {
               <div className="bg-gradient-to-r from-primary/10 to-secondary/10 px-6 py-4 border-b border-border">
                 <h2 className="text-xl font-semibold text-card-foreground flex items-center gap-2">
                   <FileText className="w-5 h-5 text-primary" />
-                  Input Documents
+                  Translation History
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Original documents you uploaded
+                  All your translations - text and documents
                 </p>
               </div>
               <div className="overflow-x-auto">
@@ -107,135 +170,137 @@ export default function HistoryPage({ user, onBack }: HistoryPageProps) {
                   <thead className="bg-muted/50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        File Name
+                        Type
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Languages
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Content
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         Date
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Size
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Action
+                        Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {history.map((doc, index) => (
+                    {history.map((item, index) => (
                       <motion.tr
-                        key={`input-${doc.timestamp}`}
+                        key={item.id}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: index * 0.05 }}
                         className="hover:bg-muted/30 transition-colors"
                       >
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                              <FileText className="w-5 h-5 text-primary" />
+                          <div className="flex items-center gap-2">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                              item.type === 'text' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'
+                            }`}>
+                              {item.type === 'text' ? (
+                                <span className="text-xs font-bold">T</span>
+                              ) : (
+                                <FileText className="w-4 h-4" />
+                              )}
                             </div>
-                            <span className="text-sm font-medium text-card-foreground">
-                              {doc.original.fileName}
+                            <span className="text-sm font-medium capitalize">
+                              {item.type}
                             </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm">
+                            <span className="font-medium">{item.fromLang.toUpperCase()}</span>
+                            <span className="mx-2">→</span>
+                            <span className="font-medium">{item.toLang.toUpperCase()}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="max-w-xs">
+                            {item.type === 'text' ? (
+                              <div>
+                                <p className="text-sm text-muted-foreground truncate">
+                                  "{item.originalText?.substring(0, 50)}..."
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {item.originalText?.length} chars
+                                </p>
+                              </div>
+                            ) : (
+                              <div>
+                                <p className="text-sm font-medium text-card-foreground truncate">
+                                  {item.originalFileName}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {formatFileSize(item.originalSize)}
+                                </p>
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Calendar className="w-4 h-4" />
-                            {formatDate(doc.date)}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                          {formatFileSize(doc.original.size)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => window.open(doc.original.url, '_blank')}
-                          >
-                            <Download className="w-4 h-4 mr-2" />
-                            Download
-                          </Button>
-                        </td>
-                      </motion.tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </motion.div>
-
-            {/* Output Documents Table */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-card border border-accent/30 rounded-xl overflow-hidden"
-            >
-              <div className="bg-gradient-to-r from-accent/10 to-secondary/10 px-6 py-4 border-b border-accent/30">
-                <h2 className="text-xl font-semibold text-card-foreground flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-accent" />
-                  Output Documents
-                </h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Translated documents ready to download
-                </p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-accent/5">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        File Name
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Size
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Action
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {history.map((doc, index) => (
-                      <motion.tr
-                        key={`output-${doc.timestamp}`}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="hover:bg-accent/5 transition-colors"
-                      >
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
-                              <FileText className="w-5 h-5 text-accent" />
-                            </div>
-                            <span className="text-sm font-medium text-card-foreground">
-                              {doc.translated.fileName}
-                            </span>
+                            {formatDate(item.timestamp)}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Calendar className="w-4 h-4" />
-                            {formatDate(doc.date)}
+                          <div className="flex gap-2">
+                            {item.type === 'text' ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => downloadText(item.originalText || '', `original_${item.timestamp}.txt`)}
+                                >
+                                  <Download className="w-4 h-4 mr-1" />
+                                  Original
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="bg-accent text-accent-foreground hover:bg-accent/90"
+                                  onClick={() => downloadText(item.translatedText || '', `translated_${item.timestamp}.txt`)}
+                                >
+                                  <Download className="w-4 h-4 mr-1" />
+                                  Translated
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => downloadDocument(item.timestamp, 'original', item.originalFileName || 'original.pdf')}
+                                >
+                                  <Download className="w-4 h-4 mr-1" />
+                                  Original
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="bg-accent text-accent-foreground hover:bg-accent/90"
+                                  onClick={() => downloadDocument(item.timestamp, 'translated', item.translatedFileName || 'translated.pdf')}
+                                >
+                                  <Download className="w-4 h-4 mr-1" />
+                                  Translated
+                                </Button>
+                              </>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleDelete(item)}
+                              disabled={deletingId === item.id}
+                            >
+                              {deletingId === item.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </Button>
                           </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                          {formatFileSize(doc.translated.size)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <Button
-                            size="sm"
-                            className="bg-accent text-accent-foreground hover:bg-accent/90"
-                            onClick={() => window.open(doc.translated.url, '_blank')}
-                          >
-                            <Download className="w-4 h-4 mr-2" />
-                            Download
-                          </Button>
                         </td>
                       </motion.tr>
                     ))}

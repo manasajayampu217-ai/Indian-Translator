@@ -19,6 +19,7 @@ import { UsageService } from "@/services/usageService";
 import { DocumentService } from "@/services/documentService";
 import { SpeechService } from "@/services/speechService";
 import { User } from "@/services/authService";
+import { HistoryService } from "@/services/historyService";
 import PricingModal from "./PricingModal";
 
 const LANGUAGES = [
@@ -217,7 +218,28 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
       if (result.success && result.documentData) {
         setDocumentProgress("Complete! (100%)");
         console.log('✅ Translation successful, document data length:', result.documentData.length);
-        console.log('Document data preview:', result.documentData.substring(0, 100));
+        
+        // Save to history (for images)
+        try {
+          setDocumentProgress("Saving to history... (95%)");
+          
+          // Convert data URL to blob for translated image
+          const response = await fetch(result.documentData);
+          const translatedBlob = await response.blob();
+          
+          HistoryService.saveDocumentTranslation(
+            user.email,
+            uploadedFile,
+            translatedBlob,
+            fromLang,
+            toLang
+          );
+          
+          console.log('✅ Saved to history');
+        } catch (historyError) {
+          console.warn('⚠️ Failed to save to history:', historyError);
+          // Don't fail the whole process if history save fails
+        }
         
         setTimeout(() => {
           setTranslatedDocumentUrl(result.documentData);
