@@ -364,9 +364,12 @@ app.get('/api/download/:userEmail/:timestamp/:type', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`🚀 IndianTranslator Backend running on port ${PORT}`);
+const HOST = process.env.HOST || '0.0.0.0';
+
+app.listen(PORT, HOST, () => {
+  console.log(`🚀 IndianTranslator Backend running on ${HOST}:${PORT}`);
   console.log(`📝 Health check: http://localhost:${PORT}/health`);
+  console.log(`🌐 Public access: http://YOUR_PUBLIC_IP:${PORT}/health`);
 });
 // Extract text from PDF using AWS Textract
 async function extractTextFromPDF(filePath) {

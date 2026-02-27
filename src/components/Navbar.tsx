@@ -1,6 +1,7 @@
-import { Languages, LogOut, User as UserIcon, History as HistoryIcon } from "lucide-react";
+import { Languages, History as HistoryIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { User } from "@/services/authService";
+import { UserButton } from "@clerk/clerk-react";
 
 interface NavbarProps {
   onGetStarted: () => void;
@@ -9,7 +10,7 @@ interface NavbarProps {
   onHistory?: () => void;
 }
 
-const Navbar = ({ onGetStarted, user, onLogout, onHistory }: NavbarProps) => {
+const Navbar = ({ onGetStarted, user, onHistory }: NavbarProps) => {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass-surface">
       <div className="container mx-auto px-6 h-16 flex items-center justify-between">
@@ -31,10 +32,6 @@ const Navbar = ({ onGetStarted, user, onLogout, onHistory }: NavbarProps) => {
         <div className="flex items-center gap-3">
           {user ? (
             <>
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20">
-                <UserIcon className="w-4 h-4 text-accent" />
-                <span className="text-sm font-medium text-accent">{user.name}</span>
-              </div>
               <Button
                 size="sm"
                 variant="outline"
@@ -44,15 +41,7 @@ const Navbar = ({ onGetStarted, user, onLogout, onHistory }: NavbarProps) => {
                 <HistoryIcon className="w-4 h-4 mr-2" />
                 History
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-accent/20 text-accent hover:bg-accent/10"
-                onClick={onLogout}
-              >
-                <LogOut className="w-4 h-4 mr-2" />
-                Logout
-              </Button>
+              <UserButton afterSignOutUrl="/" />
             </>
           ) : (
             <Button
