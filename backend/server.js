@@ -73,7 +73,22 @@ async function getFontForLanguage(lang) {
 }
 
 const app = express();
-const upload = multer({ dest: 'uploads/' });
+
+// Ensure required directories exist
+const uploadsDir = path.join(__dirname, 'uploads');
+const tempDir = path.join(__dirname, 'temp');
+
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('✅ Created uploads directory');
+}
+
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
+  console.log('✅ Created temp directory');
+}
+
+const upload = multer({ dest: uploadsDir });
 
 // Middleware
 app.use(cors());
@@ -433,6 +448,47 @@ app.get('/api/download/:userEmail/:timestamp/:type', async (req, res) => {
 
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || '0.0.0.0';
+
+// Cleanup function for old temporary files
+function cleanupOldFiles() {
+  const directories = [uploadsDir, tempDir];
+  const maxAge = 60 * 60 * 1000; // 1 hour in milliseconds
+  
+  directories.forEach(dir => {
+    if (!fs.existsSync(dir)) return;
+    
+    fs.readdir(dir, (err, files) => {
+      if (err) {
+        console.error(`Error reading ${dir}:`, err);
+        return;
+      }
+      
+      files.forEach(file => {
+        const filePath = path.join(dir, file);
+        fs.stat(filePath, (err, stats) => {
+          if (err) return;
+          
+          const now = Date.now();
+          const fileAge = now - stats.mtimeMs;
+          
+          if (fileAge > maxAge) {
+            fs.unlink(filePath, (err) => {
+              if (!err) {
+                console.log(`🗑️ Cleaned up old file: ${file}`);
+              }
+            });
+          }
+        });
+      });
+    });
+  });
+}
+
+// Run cleanup every 30 minutes
+setInterval(cleanupOldFiles, 30 * 60 * 1000);
+
+// Run cleanup on startup
+cleanupOldFiles();
 
 app.listen(PORT, HOST, () => {
   console.log(`🚀 IndianTranslator Backend running on ${HOST}:${PORT}`);
