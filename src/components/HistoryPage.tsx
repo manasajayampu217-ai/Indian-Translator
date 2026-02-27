@@ -22,12 +22,14 @@ export default function HistoryPage({ user, onBack }: HistoryPageProps) {
 
   const loadHistory = async () => {
     try {
+      console.log('📋 HistoryPage: Loading history for user:', user.email);
       setIsLoading(true);
       const items = await HistoryService.getUserHistory(user.email);
+      console.log('📋 HistoryPage: Received items:', items);
       setHistory(items);
     } catch (error) {
-      console.error('Failed to load history:', error);
-      toast.error('Failed to load history');
+      console.error('❌ HistoryPage: Failed to load history:', error);
+      toast.error('Failed to load history: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsLoading(false);
     }

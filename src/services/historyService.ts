@@ -81,16 +81,29 @@ export class HistoryService {
   // Get user's translation history
   static async getUserHistory(userEmail: string): Promise<HistoryItem[]> {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/history/${encodeURIComponent(userEmail)}`);
+      console.log('🔍 Fetching history for user:', userEmail);
+      console.log('🔍 Backend URL:', BACKEND_URL);
+      
+      const url = `${BACKEND_URL}/api/history/${encodeURIComponent(userEmail)}`;
+      console.log('🔍 Full URL:', url);
+      
+      const response = await fetch(url);
+      
+      console.log('🔍 Response status:', response.status);
+      console.log('🔍 Response ok:', response.ok);
       
       if (!response.ok) {
-        throw new Error('Failed to fetch history');
+        const errorText = await response.text();
+        console.error('❌ History fetch failed:', response.status, errorText);
+        throw new Error(`Failed to fetch history: ${response.status} ${errorText}`);
       }
       
       const data = await response.json();
+      console.log('✅ History data received:', data);
+      
       return data.history || [];
     } catch (error) {
-      console.error('Error fetching history:', error);
+      console.error('❌ Error fetching history:', error);
       return [];
     }
   }
