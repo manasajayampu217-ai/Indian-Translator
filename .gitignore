@@ -61,6 +61,10 @@ backend/uploads/*
 !backend/uploads/.gitkeep
 uploads/
 
+# History (user translation history - contains user data)
+backend/history/*
+!backend/history/.gitkeep
+
 # OS files
 .DS_Store
 .DS_Store?

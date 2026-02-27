@@ -84,25 +84,93 @@ const AWS_REGION = process.env.AWS_REGION || 'ap-south-1';
 const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
 const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
 
-const textractClient = new TextractClient({
-  region: AWS_REGION,
-  credentials: {
-    accessKeyId: AWS_ACCESS_KEY_ID,
-    secretAccessKey: AWS_SECRET_ACCESS_KEY,
-  },
-});
+// Check if AWS credentials are configured
+const hasAWSCredentials = AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY && 
+                         AWS_ACCESS_KEY_ID !== 'your_access_key_here' && 
+                         AWS_SECRET_ACCESS_KEY !== 'your_secret_key_here' &&
+                         AWS_ACCESS_KEY_ID.length > 10 && 
+                         AWS_SECRET_ACCESS_KEY.length > 10;
 
-const translateClient = new TranslateClient({
-  region: AWS_REGION,
-  credentials: {
-    accessKeyId: AWS_ACCESS_KEY_ID,
-    secretAccessKey: AWS_SECRET_ACCESS_KEY,
-  },
-});
+console.log('='.repeat(60));
+console.log('AWS CONFIGURATION CHECK');
+console.log('='.repeat(60));
+console.log('AWS Region:', AWS_REGION);
+console.log('AWS Access Key:', AWS_ACCESS_KEY_ID ? `${AWS_ACCESS_KEY_ID.substring(0, 8)}...` : 'NOT SET');
+console.log('AWS Secret Key:', AWS_SECRET_ACCESS_KEY ? 'Present (hidden)' : 'NOT SET');
+console.log('AWS Configured:', hasAWSCredentials ? '✅ YES' : '❌ NO');
+console.log('='.repeat(60));
+
+let textractClient = null;
+let translateClient = null;
+
+if (hasAWSCredentials) {
+  try {
+    textractClient = new TextractClient({
+      region: AWS_REGION,
+      credentials: {
+        accessKeyId: AWS_ACCESS_KEY_ID,
+        secretAccessKey: AWS_SECRET_ACCESS_KEY,
+      },
+    });
+
+    translateClient = new TranslateClient({
+      region: AWS_REGION,
+      credentials: {
+        accessKeyId: AWS_ACCESS_KEY_ID,
+        secretAccessKey: AWS_SECRET_ACCESS_KEY,
+      },
+    });
+    
+    console.log('✅ AWS clients initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to initialize AWS clients:', error.message);
+    textractClient = null;
+    translateClient = null;
+  }
+} else {
+  console.log('⚠️ AWS credentials not configured - PDF translation will not work');
+  console.log('💡 To enable PDF translation:');
+  console.log('   1. Get AWS credentials from https://console.aws.amazon.com/');
+  console.log('   2. Update backend/.env with your credentials');
+  console.log('   3. Restart the backend server');
+}
 
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'IndianTranslator Backend is running' });
+});
+
+// Test history endpoint
+app.get('/api/test-history', async (req, res) => {
+  try {
+    console.log('🧪 Testing history system...');
+    
+    // Test if local history directory exists
+    const LOCAL_HISTORY_DIR = path.join(__dirname, 'history');
+    const historyExists = fs.existsSync(LOCAL_HISTORY_DIR);
+    
+    console.log('🧪 Local history directory exists:', historyExists);
+    console.log('🧪 Local history directory path:', LOCAL_HISTORY_DIR);
+    
+    if (historyExists) {
+      const files = fs.readdirSync(LOCAL_HISTORY_DIR);
+      console.log('🧪 Files in history directory:', files);
+    }
+    
+    res.json({
+      status: 'ok',
+      message: 'History test endpoint',
+      localHistoryDir: LOCAL_HISTORY_DIR,
+      historyDirExists: historyExists,
+      awsConfigured: hasAWSCredentials
+    });
+  } catch (error) {
+    console.error('🧪 Test history error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    });
+  }
 });
 
 // Get user's translation history (unified format)
@@ -577,7 +645,39 @@ app.post('/api/translate-document', upload.single('file'), async (req, res) => {
     console.log('From:', fromLang, '→ To:', toLang);
     console.log('User Email:', userEmail || 'NOT PROVIDED');
     console.log('File Path:', filePath);
+    console.log('AWS Available:', hasAWSCredentials ? '✅ YES' : '❌ NO');
     console.log('='.repeat(60) + '\n');
+
+    // Check if AWS is configured
+    if (!hasAWSCredentials) {
+      console.error('❌ AWS credentials not configured');
+      
+      // Clean up uploaded file
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+      
+      return res.status(400).json({
+        error: 'AWS not configured',
+        message: 'PDF translation requires AWS credentials. Please configure AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in backend/.env file.',
+        solution: 'For now, try uploading images (PNG/JPG) instead - they work without AWS!'
+      });
+    }
+
+    if (!textractClient || !translateClient) {
+      console.error('❌ AWS clients not initialized');
+      
+      // Clean up uploaded file
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+      
+      return res.status(500).json({
+        error: 'AWS clients not available',
+        message: 'AWS services are not properly initialized. Please check your AWS credentials.',
+        solution: 'Verify your AWS credentials in backend/.env and restart the server.'
+      });
+    }
 
     // Step 1: Extract text
     console.log('Extracting text...');
@@ -667,53 +767,53 @@ app.post('/api/convert-document', upload.single('file'), async (req, res) => {
     switch (conversionType) {
       case 'pdf-to-word':
         try {
-          console.log('Converting PDF to Word with images...');
+          console.log('Converting PDF to Word (text extraction)...');
           
-          // Convert PDF pages to images using ImageMagick
-          const { exec } = await import('child_process');
-          const { promisify } = await import('util');
-          const execPromise = promisify(exec);
-          
-          const tempImagePath = path.join(__dirname, 'temp', `pdf_page_${Date.now()}.png`);
-          
-          // Ensure temp directory exists
-          if (!fs.existsSync(path.join(__dirname, 'temp'))) {
-            fs.mkdirSync(path.join(__dirname, 'temp'));
+          // Check if AWS Textract is available
+          if (!textractClient) {
+            console.log('⚠️ AWS Textract not available, using alternative method...');
+            
+            // Fallback: Extract text using pdf-parse or similar
+            // For now, return error with helpful message
+            throw new Error('PDF to Word requires AWS Textract. Please:\n1. Set up AWS credentials in backend/.env\n2. Or use "Image to Word" instead (upload PDF as image)');
           }
           
-          // Convert first page of PDF to high-quality image
-          await execPromise(`magick -density 300 "${filePath}[0]" -quality 100 "${tempImagePath}"`);
-          console.log('✅ PDF converted to image');
+          // Extract text from PDF using Textract
+          const pdfBuffer = fs.readFileSync(filePath);
           
-          // Read the image
-          const imageBuffer = fs.readFileSync(tempImagePath);
+          const textractCommand = new DetectDocumentTextCommand({
+            Document: {
+              Bytes: pdfBuffer,
+            },
+          });
+
+          const textractResponse = await textractClient.send(textractCommand);
           
-          // Create Word document with the image
+          // Extract all text
+          let extractedText = '';
+          if (textractResponse.Blocks) {
+            for (const block of textractResponse.Blocks) {
+              if (block.BlockType === 'LINE' && block.Text) {
+                extractedText += block.Text + '\n';
+              }
+            }
+          }
+          
+          if (!extractedText.trim()) {
+            throw new Error('No text found in PDF');
+          }
+          
+          console.log(`✅ Extracted ${extractedText.length} characters from PDF`);
+          
+          // Create Word document with extracted text
           const pdfWordDoc = new Document({
             sections: [{
-              properties: {
-                page: {
-                  margin: {
-                    top: 0,
-                    right: 0,
-                    bottom: 0,
-                    left: 0,
-                  },
-                },
-              },
-              children: [
+              properties: {},
+              children: extractedText.split('\n').map(line => 
                 new Paragraph({
-                  children: [
-                    new ImageRun({
-                      data: imageBuffer,
-                      transformation: {
-                        width: 595,  // A4 width in points
-                        height: 842, // A4 height in points
-                      },
-                    }),
-                  ],
-                }),
-              ],
+                  children: [new TextRun(line || ' ')],
+                })
+              ),
             }],
           });
           
@@ -722,17 +822,9 @@ app.post('/api/convert-document', upload.single('file'), async (req, res) => {
           fs.writeFileSync(outputPath, pdfWordBuffer);
           outputFilename = 'converted_document.docx';
           
-          // Cleanup temp image
-          try {
-            fs.unlinkSync(tempImagePath);
-          } catch (e) {
-            console.log('Temp file cleanup skipped');
-          }
-          
-          console.log('✅ Word document created with images preserved');
+          console.log('✅ Word document created with extracted text');
         } catch (err) {
           console.error('PDF to Word error:', err);
-          console.error('Error stack:', err.stack);
           throw new Error(`PDF to Word conversion failed: ${err.message}`);
         }
         break;
@@ -855,58 +947,50 @@ app.post('/api/convert-document', upload.single('file'), async (req, res) => {
         
       case 'image-to-word':
         try {
-          console.log('Converting image to Word with image preservation...');
+          console.log('Converting image to Word (text extraction with OCR)...');
           
-          // Read the image
-          const imgBuffer = fs.readFileSync(filePath);
-          
-          // Get image dimensions
-          const img = await loadImage(filePath);
-          const imgWidth = img.width;
-          const imgHeight = img.height;
-          
-          // Calculate dimensions to fit A4 page
-          const maxWidth = 595;
-          const maxHeight = 842;
-          let finalWidth = imgWidth;
-          let finalHeight = imgHeight;
-          
-          if (imgWidth > maxWidth || imgHeight > maxHeight) {
-            const widthRatio = maxWidth / imgWidth;
-            const heightRatio = maxHeight / imgHeight;
-            const ratio = Math.min(widthRatio, heightRatio);
-            finalWidth = Math.round(imgWidth * ratio);
-            finalHeight = Math.round(imgHeight * ratio);
+          // Check if AWS Textract is available
+          if (!textractClient) {
+            console.log('⚠️ AWS Textract not available');
+            throw new Error('Image to Word requires AWS Textract for OCR.\n\nPlease set up AWS credentials in backend/.env:\n- AWS_ACCESS_KEY_ID\n- AWS_SECRET_ACCESS_KEY\n\nOr use the "Doc" tab for image translation instead.');
           }
           
-          console.log(`Image dimensions: ${imgWidth}x${imgHeight} -> ${finalWidth}x${finalHeight}`);
+          // Read image and extract text using Textract
+          const imgBuffer = fs.readFileSync(filePath);
           
-          // Create Word document with the image
+          const imgTextractCommand = new DetectDocumentTextCommand({
+            Document: {
+              Bytes: imgBuffer,
+            },
+          });
+
+          const imgTextractResponse = await textractClient.send(imgTextractCommand);
+          
+          // Extract all text
+          let extractedImgText = '';
+          if (imgTextractResponse.Blocks) {
+            for (const block of imgTextractResponse.Blocks) {
+              if (block.BlockType === 'LINE' && block.Text) {
+                extractedImgText += block.Text + '\n';
+              }
+            }
+          }
+          
+          if (!extractedImgText.trim()) {
+            throw new Error('No text found in image. Make sure the image contains readable text.');
+          }
+          
+          console.log(`✅ Extracted ${extractedImgText.length} characters from image`);
+          
+          // Create Word document with extracted text
           const imgWordDoc = new Document({
             sections: [{
-              properties: {
-                page: {
-                  margin: {
-                    top: 0,
-                    right: 0,
-                    bottom: 0,
-                    left: 0,
-                  },
-                },
-              },
-              children: [
+              properties: {},
+              children: extractedImgText.split('\n').map(line => 
                 new Paragraph({
-                  children: [
-                    new ImageRun({
-                      data: imgBuffer,
-                      transformation: {
-                        width: finalWidth,
-                        height: finalHeight,
-                      },
-                    }),
-                  ],
-                }),
-              ],
+                  children: [new TextRun(line || ' ')],
+                })
+              ),
             }],
           });
           
@@ -914,10 +998,10 @@ app.post('/api/convert-document', upload.single('file'), async (req, res) => {
           const imgWordBuffer = await Packer.toBuffer(imgWordDoc);
           fs.writeFileSync(outputPath, imgWordBuffer);
           outputFilename = 'converted_document.docx';
-          console.log('✅ Image to Word conversion complete with image preserved');
+          
+          console.log('✅ Word document created with extracted text');
         } catch (err) {
           console.error('Image to Word error:', err);
-          console.error('Error stack:', err.stack);
           throw new Error(`Image to Word conversion failed: ${err.message}`);
         }
         break;
@@ -1023,10 +1107,26 @@ app.post('/api/convert-document', upload.single('file'), async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Conversion error:', error);
+    console.error('❌ Conversion error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      conversionType: req.body.conversionType
+    });
+    
+    // Clean up uploaded file
+    if (req.file && fs.existsSync(req.file.path)) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (e) {
+        console.error('Failed to cleanup uploaded file:', e);
+      }
+    }
+    
     res.status(500).json({ 
       error: 'Conversion failed', 
-      message: error.message 
+      message: error.message,
+      details: 'Check backend console for more information'
     });
   }
 });

@@ -1,219 +1,253 @@
-# Translation App - Multi-Language Document & Voice Translation
+# Indian Translator
 
-A modern web application for translating text, documents, and voice across 4 Indian languages with smart transliteration and layout preservation.
+A modern web application for translating between English and Indian languages (Hindi, Tamil, Telugu) with support for text, voice, and document translation.
 
 ## 🌟 Features
 
-### ✅ Implemented & Working
-- **Text Translation** (FREE - Unlimited)
-  - English, Hindi, Tamil, Telugu
-  - Smart transliteration (Roman → Native script)
-  - Multi-provider fallback system
-  
-- **Voice Translation** (FREE - Unlimited)
-  - Browser speech recognition
-  - Amazon Transcribe integration (optional)
-  - Real-time transcription
-  
-- **Document Translation** (PAID - Requires AWS)
-  - PDF and image support
-  - Layout preservation
-  - AWS Textract integration
-  - Premium: ₹149/month (10 docs/day)
-  - Pay-per-use: ₹299/document
+### Text Translation
+- **Multi-language support**: English ↔ Hindi ↔ Tamil ↔ Telugu
+- **Multiple translation providers**: AWS Translate, Google Translate, MyMemory, LibreTranslate
+- **Automatic fallback**: If one provider fails, automatically tries the next
+- **Romanized input support**: Type in English letters, get native script output
 
-### 🎯 Smart Features
-- **Transliteration**: Type in English letters, get native script
-  - Example: "namaste" → "नमस्ते" (Hindi)
-- **Same Language Detection**: Automatically handles same source/target
-- **Multi-Provider Fallback**: Google Translate → LibreTranslate → MyMemory
-- **Usage Tracking**: LocalStorage-based limits and tracking
+### Voice Translation
+- **Voice input**: Speak in any supported language
+- **Voice output**: Hear translations in native pronunciation
+- **Browser-based**: Uses Web Speech API (works in Chrome, Edge)
+
+### Document Translation
+- **Image translation**: Upload PNG/JPG images with text
+- **PDF translation**: Upload PDF documents (requires AWS)
+- **Layout preservation**: Maintains original document layout
+- **OCR support**: Extracts text from images using Tesseract.js or AWS Textract
+
+### Document Conversions
+- **Word ↔ PDF**: Convert between Word and PDF formats
+- **Image ↔ PDF**: Convert images to PDF and vice versa
+- **PDF to Word**: Extract text from PDF to editable Word (requires AWS)
+- **Image to Word**: Extract text from images to Word (requires AWS)
+
+### Translation History
+- **Persistent storage**: All translations saved until manually deleted
+- **User privacy**: Each user sees only their own history
+- **Download support**: Download original and translated files
+- **Delete functionality**: Remove individual history items
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Node.js 18+ and npm
-- AWS Account (for document translation)
-- Razorpay Account (for payments - optional)
+- (Optional) AWS account for PDF translation and advanced features
 
 ### Installation
 
-```bash
-# Clone the repository
-git clone <YOUR_GIT_URL>
-cd <YOUR_PROJECT_NAME>
+1. **Clone the repository**
+   ```bash
+   git clone <your-repo-url>
+   cd Indian-Translator
+   ```
 
-# Install dependencies
-npm install
+2. **Install frontend dependencies**
+   ```bash
+   npm install
+   ```
 
-# Create .env file (see .env.example)
-cp .env.example .env
+3. **Install backend dependencies**
+   ```bash
+   cd backend
+   npm install
+   cd ..
+   ```
 
-# Add your AWS credentials to .env
-# VITE_AWS_REGION=ap-south-1
-# VITE_AWS_ACCESS_KEY_ID=your_key
-# VITE_AWS_SECRET_ACCESS_KEY=your_secret
-
-# Start development server
-npm run dev
-```
-
-### Verify Setup
-
-```bash
-# Run setup verification
-node test-setup.js
-```
-
-## 📋 Current Status
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Text Translation | ✅ Working | Free, unlimited |
-| Voice Translation | ✅ Working | Free, unlimited (HTTPS required) |
-| Document Translation | ⚠️ Needs AWS | Requires AWS Textract activation |
-| Transliteration | ✅ Working | Roman → Native script |
-| Usage Tracking | ✅ Working | LocalStorage-based |
-| Pricing Modal | ✅ Working | UI complete |
-| Payment Gateway | ⚠️ Not integrated | Needs Razorpay setup |
-
-## 🔧 AWS Setup Required
-
-### 1. Activate AWS Services
-
-#### AWS Textract (Required for documents)
-1. Go to [AWS Console](https://console.aws.amazon.com/)
-2. Search "Amazon Textract"
-3. Click "Get Started"
-
-#### AWS Translate (Optional - better quality)
-1. Search "Amazon Translate"
-2. Click "Get Started"
-
-### 2. Add IAM Permissions
-1. Go to IAM → Users → Your user
-2. Add policies:
-   - `TranslateFullAccess`
-   - `AmazonTextractFullAccess`
-   - `AmazonTranscribeFullAccess` (optional)
-
-### 3. Test
-```bash
-npm run dev
-# Try uploading a document in the Document tab
-```
-
-## 💳 Payment Integration (Optional)
-
-### Razorpay Setup
-1. Sign up at https://razorpay.com/
-2. Get API keys
-3. Add to `.env`:
+4. **Set up environment variables**
+   
+   Frontend (`.env`):
    ```env
-   VITE_RAZORPAY_KEY_ID=your_key_id
-   VITE_RAZORPAY_KEY_SECRET=your_secret
-   ```
-4. Add script to `index.html`:
-   ```html
-   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+   VITE_BACKEND_URL=http://localhost:3001
+   VITE_AWS_REGION=us-east-1
+   VITE_AWS_ACCESS_KEY_ID=
+   VITE_AWS_SECRET_ACCESS_KEY=
    ```
 
-## 📚 Documentation
+   Backend (`backend/.env`):
+   ```env
+   AWS_REGION=us-east-1
+   AWS_ACCESS_KEY_ID=your_access_key_here
+   AWS_SECRET_ACCESS_KEY=your_secret_key_here
+   AWS_S3_BUCKET=your-bucket-name
+   PORT=3001
+   ```
 
-- **[COMPLETE_SETUP_GUIDE.md](./COMPLETE_SETUP_GUIDE.md)** - Detailed setup instructions
-- **[AWS_SETUP.md](./AWS_SETUP.md)** - AWS configuration guide
-- **[MONETIZATION_IMPLEMENTATION.md](./MONETIZATION_IMPLEMENTATION.md)** - Pricing strategy
-- **[DOCUMENT_TRANSLATION_GUIDE.md](./DOCUMENT_TRANSLATION_GUIDE.md)** - Document feature details
-- **[TRANSLATION_GUIDE.md](./TRANSLATION_GUIDE.md)** - Translation service details
-- **[USAGE_GUIDE.md](./USAGE_GUIDE.md)** - Usage tracking system
+5. **Start the application**
+   
+   Terminal 1 - Backend:
+   ```bash
+   cd backend
+   npm start
+   ```
 
-## 🛠️ Tech Stack
+   Terminal 2 - Frontend:
+   ```bash
+   npm run dev
+   ```
 
-- **Frontend**: React 18, TypeScript, Vite
-- **UI**: Tailwind CSS, shadcn/ui, Framer Motion
-- **Translation**: Google Translate API, LibreTranslate, MyMemory
-- **AWS Services**: Translate, Textract, Transcribe
-- **Payment**: Razorpay (to be integrated)
-- **State**: React Hooks, LocalStorage
+6. **Open in browser**
+   ```
+   http://localhost:5173
+   ```
 
-## 📦 Project Structure
+## 📖 Usage
+
+### Text Translation
+1. Go to the "Text" tab
+2. Select source and target languages
+3. Type or paste your text
+4. Click "Translate"
+
+### Voice Translation
+1. Go to the "Voice" tab
+2. Select source and target languages
+3. Click the microphone icon and speak
+4. Click "Translate"
+5. Click the speaker icon to hear the translation
+
+### Document Translation
+1. Go to the "Doc" tab
+2. Select source and target languages
+3. Upload an image (PNG/JPG) or PDF
+4. Click "Translate"
+5. Download the translated document
+
+### View History
+1. Click the "History" button in the navigation
+2. View all your past translations
+3. Download original or translated files
+4. Delete individual items as needed
+
+## 🔧 Configuration
+
+### Without AWS (Basic Features)
+Works out of the box:
+- ✅ Text translation (all languages)
+- ✅ Image translation (all languages)
+- ✅ Voice translation
+- ✅ History
+- ✅ Word ↔ PDF conversion
+- ✅ Image ↔ PDF conversion
+
+### With AWS (Advanced Features)
+Requires AWS credentials:
+- ✅ PDF translation
+- ✅ Image to Word conversion
+- ✅ PDF to Word conversion
+- ✅ S3 storage for history (optional)
+
+### AWS Setup
+1. Create AWS account at https://aws.amazon.com/
+2. Create IAM user with permissions:
+   - `AmazonTextractFullAccess`
+   - `AmazonTranslateFullAccess`
+   - `AmazonS3FullAccess` (optional, for history)
+3. Generate access keys
+4. Add to `backend/.env`
+
+## 🏗️ Architecture
+
+### Frontend
+- **Framework**: React + TypeScript
+- **Build Tool**: Vite
+- **UI Library**: shadcn/ui + Tailwind CSS
+- **Routing**: React Router
+- **State Management**: React Hooks
+- **OCR**: Tesseract.js (browser-based)
+
+### Backend
+- **Runtime**: Node.js
+- **Framework**: Express
+- **File Upload**: Multer
+- **PDF Processing**: pdf-lib
+- **Word Processing**: docx, mammoth
+- **AWS Services**: Textract, Translate, S3
+
+## 📁 Project Structure
 
 ```
-src/
-├── components/
-│   ├── TranslationPanel.tsx    # Main translation interface
-│   ├── PricingModal.tsx         # Pricing UI
-│   ├── HeroSection.tsx          # Landing page hero
-│   ├── FeaturesSection.tsx      # Features showcase
-│   └── ui/                      # shadcn/ui components
-├── services/
-│   ├── translationService.ts    # Multi-provider translation
-│   ├── documentService.ts       # Document translation
-│   ├── transcribeService.ts     # Voice recognition
-│   ├── transliterationService.ts # Roman → Native script
-│   └── usageService.ts          # Usage tracking & limits
-└── pages/
-    └── Index.tsx                # Main page
+Indian-Translator/
+├── src/                      # Frontend source
+│   ├── components/          # React components
+│   ├── services/            # API services
+│   ├── pages/               # Page components
+│   └── lib/                 # Utilities
+├── backend/                 # Backend source
+│   ├── server.js           # Express server
+│   ├── s3Service.js        # AWS S3 integration
+│   ├── history/            # User translation history
+│   └── uploads/            # Temporary file uploads
+├── public/                  # Static assets
+└── docs/                    # Documentation
 ```
 
-## 🚀 Deployment
+## 🌐 Supported Languages
 
-### Vercel (Recommended)
-```bash
-# Push to GitHub
-git push origin main
+| Language | Code | Native Name |
+|----------|------|-------------|
+| English  | en   | English     |
+| Hindi    | hi   | हिन्दी      |
+| Tamil    | ta   | தமிழ்       |
+| Telugu   | te   | తెలుగు      |
 
-# Deploy on Vercel
-# 1. Import repository
-# 2. Add environment variables
-# 3. Deploy
-```
+## 🔒 Privacy & Security
 
-### Netlify
-```bash
-# Push to GitHub
-git push origin main
+- **User isolation**: Each user's history is stored separately
+- **Local storage**: History stored locally by default
+- **No tracking**: No analytics or tracking
+- **Secure**: Environment variables for sensitive data
+- **CORS enabled**: Secure cross-origin requests
 
-# Deploy on Netlify
-# 1. Import repository
-# 2. Add environment variables
-# 3. Deploy
-```
+## 📝 Documentation
+
+- [AWS Setup Guide](./AWS_SETUP_GUIDE.md) - Detailed AWS configuration
+- [Conversions Guide](./CONVERSIONS_GUIDE.md) - Document conversion features
+- [Document Translation Guide](./DOCUMENT_TRANSLATION_GUIDE.md) - Translation features
+- [Deployment Guide](./DEPLOYMENT.md) - Production deployment
+- [Deployment Checklist](./DEPLOYMENT_CHECKLIST.md) - Pre-deployment checklist
 
 ## 🐛 Troubleshooting
 
-### "SubscriptionRequiredException"
-- **Cause**: AWS Translate not activated
-- **Fix**: Activate in AWS Console
+### Voice not working
+- Use Chrome or Edge browser
+- Allow microphone permissions
+- Check browser console for errors
 
-### "No text found in document"
-- **Cause**: AWS Textract not configured
-- **Fix**: Activate AWS Textract and add IAM permissions
+### PDF translation failing
+- Ensure AWS credentials are configured
+- Check AWS Textract is enabled in your region
+- Verify IAM permissions
 
-### Voice not capturing
-- **Cause**: Browser requires HTTPS
-- **Fix**: Deploy to HTTPS hosting or use localhost
-
-### Document pricing modal appears
-- **Cause**: User not premium
-- **Fix**: Click "Upgrade to Premium" (currently simulated)
-
-## 📝 Next Steps
-
-1. ✅ Activate AWS Textract
-2. ✅ Test document translation
-3. ⚠️ Set up Razorpay for payments
-4. ⚠️ Deploy to Vercel/Netlify
-5. ⚠️ Activate AWS Translate (optional)
+### History not showing
+- Check backend is running on port 3001
+- Verify `backend/history/` directory exists
+- Check browser console for errors
 
 ## 🤝 Contributing
 
-This is a private project. For questions or issues, contact the development team.
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📄 License
 
-Private - All rights reserved
+This project is licensed under the MIT License.
+
+## 🙏 Acknowledgments
+
+- AWS for Textract and Translate services
+- Tesseract.js for browser-based OCR
+- shadcn/ui for beautiful UI components
+- All open-source libraries used in this project
+
+## 📧 Support
+
+For issues and questions, please open an issue on GitHub.
 
 ---
 
-**Built with ❤️ using React, TypeScript, and AWS**
+Made with ❤️ for Indian language translation

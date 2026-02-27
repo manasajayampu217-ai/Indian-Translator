@@ -22,8 +22,13 @@ console.log('Bucket:', S3_BUCKET);
 console.log('Access Key:', AWS_ACCESS_KEY_ID ? `${AWS_ACCESS_KEY_ID.substring(0, 8)}...` : 'NOT SET');
 console.log('Secret Key:', AWS_SECRET_ACCESS_KEY ? 'Present' : 'NOT SET');
 
-// Check if AWS credentials are available
-const AWS_AVAILABLE = AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY;
+// Check if AWS credentials are available and valid
+const AWS_AVAILABLE = AWS_ACCESS_KEY_ID && 
+                     AWS_SECRET_ACCESS_KEY && 
+                     AWS_ACCESS_KEY_ID !== 'your_access_key_here' && 
+                     AWS_SECRET_ACCESS_KEY !== 'your_secret_key_here' &&
+                     AWS_ACCESS_KEY_ID.length > 10 && 
+                     AWS_SECRET_ACCESS_KEY.length > 10;
 
 if (!AWS_AVAILABLE) {
   console.log('⚠️ AWS credentials not found. Using local file storage for history.');
@@ -412,6 +417,8 @@ function processDocumentListWithMetadata(items) {
  * Process document list to group by translation sessions
  */
 function processDocumentList(items, keyExtractor) {
+  console.log(`📋 Processing ${items.length} items...`);
+  
   // Group documents by translation session
   const documents = [];
   const sessions = {};
@@ -421,15 +428,22 @@ function processDocumentList(items, keyExtractor) {
     const key = itemData.key;
     const fileName = path.basename(key);
     
+    console.log(`  📄 Processing file: ${fileName}`);
+    
     // Extract timestamp and type from filename
-    const match = fileName.match(/^(\d+)_(original|translated)_(.+)$/);
+    // Pattern: {timestamp1}_{timestamp2}_{type}_{filename}
+    // We use timestamp2 as the session identifier
+    const match = fileName.match(/^(\d+)_(\d+)_(original|translated)_(.+)$/);
     if (match) {
-      const [, timestamp, type, originalName] = match;
+      const [, , sessionTimestamp, type, originalName] = match;
+      const timestamp = parseInt(sessionTimestamp);
+      
+      console.log(`    ✅ Matched new pattern: timestamp=${timestamp}, type=${type}`);
       
       if (!sessions[timestamp]) {
         sessions[timestamp] = {
-          timestamp: parseInt(timestamp),
-          date: new Date(parseInt(timestamp)).toISOString(),
+          timestamp: timestamp,
+          date: new Date(timestamp).toISOString(),
           metadata: itemData.metadata || {},
         };
       }
@@ -440,15 +454,53 @@ function processDocumentList(items, keyExtractor) {
         size: itemData.size,
         lastModified: itemData.lastModified,
       };
+    } else {
+      // Try old pattern for backward compatibility: {timestamp}_{type}_{filename}
+      const oldMatch = fileName.match(/^(\d+)_(original|translated)_(.+)$/);
+      if (oldMatch) {
+        const [, timestamp, type, originalName] = oldMatch;
+        const ts = parseInt(timestamp);
+        
+        console.log(`    ✅ Matched old pattern: timestamp=${ts}, type=${type}`);
+        
+        if (!sessions[ts]) {
+          sessions[ts] = {
+            timestamp: ts,
+            date: new Date(ts).toISOString(),
+            metadata: itemData.metadata || {},
+          };
+        }
+        
+        sessions[ts][type] = {
+          key,
+          filename: originalName,
+          size: itemData.size,
+          lastModified: itemData.lastModified,
+        };
+      } else {
+        console.log(`    ⚠️ No pattern match for: ${fileName}`);
+      }
     }
   }
 
+  console.log(`📊 Found ${Object.keys(sessions).length} sessions`);
+
   // Convert sessions object to array
   for (const [timestamp, session] of Object.entries(sessions)) {
+    console.log(`  🔍 Session ${timestamp}:`, {
+      hasOriginal: !!session.original,
+      hasTranslated: !!session.translated
+    });
+    
     if (session.original && session.translated) {
       documents.push(session);
+      console.log(`    ✅ Added to documents`);
+    } else {
+      console.log(`    ⚠️ Skipped (missing original or translated)`);
     }
   }
+
+  console.log(`✅ Returning ${documents.length} complete documents`);
 
   // Sort by timestamp (newest first)
   documents.sort((a, b) => b.timestamp - a.timestamp);
@@ -551,16 +603,33 @@ async function deleteFromLocal(userEmail, timestamp) {
     }
     
     const files = fs.readdirSync(userDir);
-    const filesToDelete = files.filter(file => file.startsWith(`${timestamp}_`));
+    
+    // Find files matching both patterns
+    const filesToDelete = files.filter(file => {
+      // New pattern: {timestamp1}_{timestamp2}_{type}_{filename}
+      const newMatch = file.match(/^(\d+)_(\d+)_(original|translated)_/);
+      if (newMatch && newMatch[2] === timestamp.toString()) {
+        return true;
+      }
+      // Old pattern: {timestamp}_{type}_{filename}
+      if (file.startsWith(`${timestamp}_`)) {
+        return true;
+      }
+      return false;
+    });
+    
+    console.log(`🗑️ Deleting ${filesToDelete.length} files for timestamp ${timestamp}`);
     
     for (const file of filesToDelete) {
       const filePath = path.join(userDir, file);
       fs.unlinkSync(filePath);
+      console.log(`  - Deleted: ${file}`);
       
       // Also delete metadata file if exists
       const metadataPath = filePath + '.meta.json';
       if (fs.existsSync(metadataPath)) {
         fs.unlinkSync(metadataPath);
+        console.log(`  - Deleted metadata: ${file}.meta.json`);
       }
     }
     
@@ -655,19 +724,49 @@ async function getFileFromLocal(userEmail, timestamp, type) {
     const userDir = path.join(LOCAL_HISTORY_DIR, userEmail);
     
     if (!fs.existsSync(userDir)) {
+      console.log('❌ User directory not found:', userDir);
       return null;
     }
     
     const files = fs.readdirSync(userDir);
-    const file = files.find(f => f.startsWith(`${timestamp}_${type}_`));
+    console.log('📁 Files in user directory:', files);
+    console.log('🔍 Looking for timestamp:', timestamp, 'type:', type);
+    
+    // Try new pattern first: {timestamp1}_{timestamp2}_{type}_{filename}
+    let file = files.find(f => {
+      const match = f.match(/^(\d+)_(\d+)_(original|translated)_/);
+      if (match) {
+        const [, , sessionTimestamp, fileType] = match;
+        return sessionTimestamp === timestamp.toString() && fileType === type;
+      }
+      return false;
+    });
+    
+    // Fallback to old pattern: {timestamp}_{type}_{filename}
+    if (!file) {
+      file = files.find(f => f.startsWith(`${timestamp}_${type}_`));
+    }
     
     if (!file) {
+      console.log('❌ File not found for timestamp:', timestamp, 'type:', type);
       return null;
     }
     
+    console.log('✅ Found file:', file);
+    
     const filePath = path.join(userDir, file);
     const body = fs.readFileSync(filePath);
-    const filename = file.replace(/^\d+_(original|translated)_/, '');
+    
+    // Extract original filename - handle both patterns
+    let filename = file;
+    // Try new pattern first
+    const newPatternMatch = file.match(/^\d+_\d+_(original|translated)_(.+)$/);
+    if (newPatternMatch) {
+      filename = newPatternMatch[2];
+    } else {
+      // Try old pattern
+      filename = file.replace(/^\d+_(original|translated)_/, '');
+    }
     const ext = path.extname(filename);
     
     return {

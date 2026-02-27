@@ -72,6 +72,15 @@ export class DocumentService {
       console.log('Starting text extraction from:', file.name, 'Size:', file.size, 'Type:', file.type);
       console.log('Source language:', sourceLang);
       
+      // Map language codes to Tesseract language codes for fallback
+      const tesseractLangMap: { [key: string]: string } = {
+        'en': 'eng',
+        'hi': 'hin',  // Hindi
+        'ta': 'tam',  // Tamil
+        'te': 'tel',  // Telugu
+      };
+      const tesseractLang = tesseractLangMap[sourceLang] || 'eng';
+      
       const client = this.getTextractClient();
       
       if (!client) {
@@ -79,7 +88,8 @@ export class DocumentService {
         console.warn('1. VITE_AWS_ACCESS_KEY_ID in .env');
         console.warn('2. VITE_AWS_SECRET_ACCESS_KEY in .env');
         console.warn('3. AWS Textract service activated in AWS Console');
-        return this.extractTextFallback(file, sourceLang);
+        console.warn(`Using Tesseract.js fallback with language: ${tesseractLang}`);
+        return this.extractTextFallback(file, tesseractLang);
       }
 
       console.log('✅ AWS Textract client initialized');
@@ -132,7 +142,16 @@ export class DocumentService {
         console.error('Error name:', error.name);
         console.error('Error message:', error.message);
       }
-      return this.extractTextFallback(file, sourceLang);
+      // Map language codes to Tesseract language codes for fallback
+      const tesseractLangMap: { [key: string]: string } = {
+        'en': 'eng',
+        'hi': 'hin',  // Hindi
+        'ta': 'tam',  // Tamil
+        'te': 'tel',  // Telugu
+      };
+      const tesseractLang = tesseractLangMap[sourceLang] || 'eng';
+      console.warn(`Falling back to Tesseract.js with language: ${tesseractLang}`);
+      return this.extractTextFallback(file, tesseractLang);
     }
   }
 
@@ -226,13 +245,23 @@ export class DocumentService {
     toLang: string,
     onProgress?: (current: number, total: number) => void
   ): Promise<TextBlock[]> {
+    console.log(`🔄 Starting translation of ${blocks.length} blocks from ${fromLang} to ${toLang}`);
     const translatedBlocks: TextBlock[] = [];
     
     for (let i = 0; i < blocks.length; i++) {
       const block = blocks[i];
       
+      console.log(`📝 Block ${i + 1}/${blocks.length}: "${block.text.substring(0, 50)}..."`);
+      
       try {
         const result = await TranslationService.translate(block.text, fromLang, toLang);
+        
+        console.log(`✅ Translation result:`, {
+          success: result.success,
+          provider: result.provider,
+          original: block.text.substring(0, 30),
+          translated: result.translatedText?.substring(0, 30)
+        });
         
         translatedBlocks.push({
           ...block,
@@ -329,6 +358,8 @@ export class DocumentService {
             ctx.fillStyle = isLightBackground ? 'black' : 'white';
             ctx.textBaseline = 'top';
             ctx.textAlign = 'left';
+            
+            console.log(`🎨 Drawing text at (${x.toFixed(0)}, ${y.toFixed(0)}):`, block.translatedText?.substring(0, 30));
             
             // Smart text wrapping
             const words = block.translatedText.split(' ');

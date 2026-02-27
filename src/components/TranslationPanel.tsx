@@ -148,6 +148,15 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
     
     const isPDF = uploadedFile.type === 'application/pdf';
     
+    // Validate language selection
+    if (fromLang === toLang) {
+      toast.error('Please select different source and target languages');
+      return;
+    }
+    
+    console.log(`📄 Document Translation: ${fromLang} → ${toLang}`);
+    console.log(`File: ${uploadedFile.name}, Type: ${uploadedFile.type}`);
+    
     setIsTranslating(true);
     setTranslatedDocumentUrl("");
     setDocumentProgress("Starting... (0%)");
@@ -159,6 +168,7 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
       // For PDFs, use backend API
       if (isPDF) {
         console.log('Using backend API for PDF translation...');
+        console.log(`Languages: ${fromLang} → ${toLang}`);
         setDocumentProgress("Uploading to server... (10%)");
         
         const formData = new FormData();
@@ -166,6 +176,13 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
         formData.append('fromLang', fromLang);
         formData.append('toLang', toLang);
         formData.append('userEmail', user.email); // Add user email for S3 storage
+        
+        console.log('FormData prepared:', {
+          fileName: uploadedFile.name,
+          fromLang,
+          toLang,
+          userEmail: user.email
+        });
         
         await new Promise(resolve => setTimeout(resolve, 300));
         setDocumentProgress("Extracting text... (30%)");
@@ -182,7 +199,20 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
         const response = await responsePromise;
         
         if (!response.ok) {
-          throw new Error('Backend translation failed');
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          console.error('Backend error:', errorData);
+          
+          if (errorData.error === 'AWS not configured') {
+            throw new Error(
+              '⚠️ PDF translation requires AWS setup.\n\n' +
+              '📋 Quick Solutions:\n' +
+              '1. Use IMAGE files (PNG/JPG) instead - they work without AWS!\n' +
+              '2. Or set up AWS credentials in backend/.env\n\n' +
+              '💡 Images work perfectly for all languages!'
+            );
+          }
+          
+          throw new Error('Backend translation failed: ' + (errorData.message || errorData.error));
         }
         
         setDocumentProgress("Creating PDF... (85%)");
@@ -196,13 +226,25 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
         
         setTranslatedDocumentUrl(url);
         setDocumentProgress("");
-        toast.success('✅ PDF translated successfully!');
+        
+        const langNames: { [key: string]: string } = {
+          'en': 'English',
+          'hi': 'Hindi',
+          'ta': 'Tamil',
+          'te': 'Telugu'
+        };
+        
+        toast.success(`✅ PDF translated from ${langNames[fromLang]} to ${langNames[toLang]}!`);
+        console.log('✅ PDF translation complete');
         
         return;
       }
       
       // For images, use client-side translation
       // For images, use client-side translation
+      console.log('Using client-side translation for image...');
+      console.log(`Languages: ${fromLang} → ${toLang}`);
+      
       const result = await DocumentService.translateDocument(
         uploadedFile,
         fromLang,
@@ -245,7 +287,15 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
           setTranslatedDocumentUrl(result.documentData);
           setDocumentProgress("");
           console.log('✅ Document URL set, should display now');
-          toast.success(`✅ Document translated successfully as ${isPDF ? 'PDF' : 'Image'}!`);
+          
+          const langNames: { [key: string]: string } = {
+            'en': 'English',
+            'hi': 'Hindi',
+            'ta': 'Tamil',
+            'te': 'Telugu'
+          };
+          
+          toast.success(`✅ Image translated from ${langNames[fromLang]} to ${langNames[toLang]}!`);
         }, 500);
       } else {
         console.error('❌ Translation failed:', result.error);
@@ -745,6 +795,22 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
             {/* Document tab */}
             <TabsContent value="document" className="m-0">
               <div className="p-8">
+                {/* Info banner */}
+                <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">Document Translation</h4>
+                      <p className="text-sm text-blue-800 dark:text-blue-200">
+                        ✅ Supports all languages: English ↔ Hindi ↔ Tamil ↔ Telugu
+                      </p>
+                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                        📄 PDFs: Require AWS setup | 🖼️ Images (PNG/JPG): Work without AWS
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
                 {!translatedDocumentUrl ? (
                   <div
                     className="border-2 border-dashed border-border rounded-2xl p-12 text-center hover:border-accent/50 transition-colors cursor-pointer"
@@ -844,51 +910,6 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
                         >
                           <Download className="w-4 h-4 mr-2" />
                           Download PDF
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          onClick={async () => {
-                            try {
-                              toast.info('Converting to Word document...');
-                              
-                              const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
-                              
-                              // Get the blob from the translated document URL
-                              const response = await fetch(translatedDocumentUrl);
-                              const blob = await response.blob();
-                              
-                              // Send to backend for Word conversion
-                              const formData = new FormData();
-                              formData.append('file', blob, 'translated.pdf');
-                              
-                              const convertResponse = await fetch(`${BACKEND_URL}/api/convert-to-word`, {
-                                method: 'POST',
-                                body: formData,
-                              });
-                              
-                              if (!convertResponse.ok) {
-                                throw new Error('Conversion failed');
-                              }
-                              
-                              const wordBlob = await convertResponse.blob();
-                              const url = URL.createObjectURL(wordBlob);
-                              
-                              const link = document.createElement('a');
-                              link.href = url;
-                              const originalName = uploadedFile?.name.replace(/\.[^/.]+$/, '') || 'document';
-                              link.download = `translated_${originalName}.docx`;
-                              link.click();
-                              
-                              URL.revokeObjectURL(url);
-                              toast.success('✅ Word document downloaded!');
-                            } catch (error) {
-                              console.error('Word conversion error:', error);
-                              toast.error('Failed to convert to Word document');
-                            }
-                          }}
-                        >
-                          <FileText className="w-4 h-4 mr-2" />
-                          Convert to Word
                         </Button>
                       </div>
                     </div>
@@ -1068,16 +1089,6 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
                     >
                       <FileText className="w-6 h-6 text-accent" />
                       <span className="text-sm font-medium">Image to Word</span>
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      className={`h-24 flex-col gap-2 hover:bg-accent/10 hover:border-accent ${selectedConversion === 'word-to-image' ? 'bg-accent/20 border-accent' : ''}`}
-                      disabled={!uploadedFile}
-                      onClick={() => handleConversion('word-to-image')}
-                    >
-                      <FileText className="w-6 h-6 text-accent" />
-                      <span className="text-sm font-medium">Word to Image</span>
                     </Button>
                   </div>
 
