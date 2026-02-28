@@ -128,7 +128,9 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
       console.log('Final text type:', typeof finalText);
       console.log('Setting output text...');
       
-      setOutputText(finalText);
+      // Clean up the text - remove extra whitespace and normalize
+      const cleanedText = finalText.trim().replace(/\s+/g, ' ');
+      setOutputText(cleanedText);
       
       console.log('Output text set successfully');
       toast.success(`✅ ${usedService}`);
@@ -775,7 +777,7 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                       >
-                        <p className="min-h-[200px] text-base text-card-foreground whitespace-pre-wrap">
+                        <p className="min-h-[200px] text-base text-card-foreground break-words">
                           {outputText || <span className="text-muted-foreground">Translation will appear here...</span>}
                         </p>
                         {outputText && (
@@ -991,7 +993,7 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
                         </div>
                       ) : (
                         <>
-                          <p className="text-card-foreground min-h-[150px] whitespace-pre-wrap text-base">
+                          <p className="text-card-foreground min-h-[150px] break-words text-base">
                             {outputText ? outputText : <span className="text-muted-foreground italic">Translation will appear here...</span>}
                           </p>
                           {outputText && (
