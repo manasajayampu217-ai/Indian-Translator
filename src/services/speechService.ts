@@ -48,12 +48,13 @@ export class SpeechService {
       try {
         const lang = this.googleTTSLangMap[language] || 'en';
         
-        // Use backend proxy to avoid CORS issues
-        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+        // Use Render backend for voice (lightweight, always-on)
+        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL_VOICE || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
         const encodedText = encodeURIComponent(text);
         const audioUrl = `${BACKEND_URL}/api/tts?text=${encodedText}&lang=${lang}`;
         
-        console.log('🔊 Loading Google TTS audio...');
+        console.log('🔊 Loading Google TTS audio from Render backend...');
+        console.log('Backend URL:', BACKEND_URL);
         
         // Create audio element with preload
         const audio = new Audio();
@@ -218,8 +219,8 @@ export class SpeechService {
       console.error('❌ Speech error:', event.error);
       if (!hasEnded) {
         hasEnded = true;
-        if (event.error === 'interrupted' || event.error === 'cancelled') {
-          console.log('Speech was interrupted/cancelled');
+        if (event.error === 'interrupted' || event.error === 'canceled') {
+          console.log('Speech was interrupted/canceled');
           resolve(); // Don't treat as error
         } else {
           reject(new Error(`Speech error: ${event.error}`));

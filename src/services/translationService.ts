@@ -40,7 +40,8 @@ export class TranslationService {
     lang: string
   ): Promise<string> {
     try {
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+      // Use Render backend for text operations (lightweight)
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL_VOICE || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
       const response = await fetch(`${BACKEND_URL}/api/input-tools?text=${encodeURIComponent(text)}&lang=${lang}`);
       const data = await response.json();
 

@@ -1,4 +1,5 @@
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+// Use EC2 backend for document history (documents are stored on EC2)
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL_DOCUMENTS || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
 export interface HistoryItem {
   id: string;
