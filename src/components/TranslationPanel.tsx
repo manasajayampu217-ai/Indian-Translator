@@ -164,8 +164,9 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
     setDocumentProgress("Starting... (0%)");
     
     try {
-      // Check if backend is available
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+      // Use EC2 backend for document translation (heavy processing)
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL_DOCUMENTS || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+      console.log('📄 Document backend URL:', BACKEND_URL);
       
       // For PDFs, use backend API
       if (isPDF) {
@@ -355,7 +356,10 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
     setDocumentProgress("Starting conversion... (0%)");
 
     try {
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+      // Use EC2 backend for document conversion (heavy processing)
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL_DOCUMENTS || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+      console.log('📄 Document conversion backend URL:', BACKEND_URL);
+      
       const formData = new FormData();
       formData.append('file', uploadedFile);
       formData.append('conversionType', selectedConversion);
