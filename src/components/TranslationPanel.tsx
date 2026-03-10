@@ -671,10 +671,10 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
   };
 
   return (
-    <section className="py-24 bg-secondary/30" id="translate">
-      <div className="container mx-auto px-6">
+    <section className="py-12 sm:py-24 bg-secondary/30" id="translate">
+      <div className="container mx-auto px-4 sm:px-6">
         <motion.div
-          className="text-center mb-12"
+          className="text-center mb-8 sm:mb-12"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -719,9 +719,9 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
             </div>
 
             {/* Language selectors */}
-            <div className="flex items-center gap-3 px-6 py-4 border-b border-border">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 px-4 sm:px-6 py-4 border-b border-border">
               <Select value={fromLang} onValueChange={setFromLang}>
-                <SelectTrigger className="w-48">
+                <SelectTrigger className="w-full sm:w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -731,12 +731,12 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
                 </SelectContent>
               </Select>
 
-              <Button variant="ghost" size="icon" onClick={swapLanguages} className="rounded-full hover:bg-accent/15">
+              <Button variant="ghost" size="icon" onClick={swapLanguages} className="rounded-full hover:bg-accent/15 flex-shrink-0">
                 <ArrowLeftRight className="w-4 h-4" />
               </Button>
 
               <Select value={toLang} onValueChange={setToLang}>
-                <SelectTrigger className="w-48">
+                <SelectTrigger className="w-full sm:w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -749,8 +749,8 @@ const TranslationPanel = ({ user }: TranslationPanelProps) => {
 
             {/* Text tab */}
             <TabsContent value="text" className="m-0">
-              <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border">
-                <div className="p-6 relative">
+              <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border">
+                <div className="p-4 sm:p-6 relative">
                   <div className="mb-3 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                     <p className="text-xs text-blue-800 dark:text-blue-200">
                       💡 Tip: Type in English or Romanized Tamil/Telugu (e.g., "Did you eat?" or "saaptiya")

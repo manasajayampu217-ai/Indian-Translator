@@ -12,21 +12,21 @@ const HeroSection = ({ onGetStarted }: { onGetStarted: () => void }) => {
         <div className="absolute inset-0 bg-gradient-to-br from-primary via-secondary to-accent" />
       </div>
 
-      <div className="relative z-10 container mx-auto px-6 py-24">
+      <div className="relative z-10 container mx-auto px-4 sm:px-6 py-16 sm:py-24">
         <div className="max-w-3xl">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7 }}
           >
-            <span className="inline-flex items-center gap-2 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 px-4 py-1.5 text-sm font-medium text-white mb-6">
-              <Languages className="w-4 h-4" />
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 px-3 sm:px-4 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-white mb-4 sm:mb-6">
+              <Languages className="w-3 h-3 sm:w-4 sm:h-4" />
               AI-Powered Multimodal Translation
             </span>
           </motion.div>
 
           <motion.h1
-            className="font-display text-5xl md:text-7xl font-bold text-white leading-tight mb-6"
+            className="font-display text-3xl sm:text-5xl md:text-7xl font-bold text-white leading-tight mb-4 sm:mb-6"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.1 }}
@@ -36,7 +36,7 @@ const HeroSection = ({ onGetStarted }: { onGetStarted: () => void }) => {
           </motion.h1>
 
           <motion.p
-            className="text-lg md:text-xl text-white/90 mb-10 max-w-2xl"
+            className="text-base sm:text-lg md:text-xl text-white/90 mb-6 sm:mb-10 max-w-2xl"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.2 }}
@@ -45,22 +45,22 @@ const HeroSection = ({ onGetStarted }: { onGetStarted: () => void }) => {
           </motion.p>
 
           <motion.div
-            className="flex flex-wrap gap-4"
+            className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.3 }}
           >
             <Button
               size="lg"
-              className="bg-white text-primary hover:bg-white/90 font-semibold text-base px-8 py-6 rounded-xl shadow-elevated"
+              className="bg-white text-primary hover:bg-white/90 font-semibold text-sm sm:text-base px-6 sm:px-8 py-5 sm:py-6 rounded-xl shadow-elevated w-full sm:w-auto"
               onClick={onGetStarted}
             >
-              Start Translating <ArrowRight className="ml-2 w-5 h-5" />
+              Start Translating <ArrowRight className="ml-2 w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
             <Button
               size="lg"
               variant="outline"
-              className="border-white/40 bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 text-base px-8 py-6 rounded-xl"
+              className="border-white/40 bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 text-sm sm:text-base px-6 sm:px-8 py-5 sm:py-6 rounded-xl w-full sm:w-auto"
               onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
             >
               See How It Works
@@ -69,7 +69,7 @@ const HeroSection = ({ onGetStarted }: { onGetStarted: () => void }) => {
 
           {/* Stats */}
           <motion.div
-            className="flex flex-wrap gap-10 mt-16"
+            className="flex flex-wrap gap-6 sm:gap-10 mt-10 sm:mt-16"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.7, delay: 0.5 }}
@@ -80,8 +80,8 @@ const HeroSection = ({ onGetStarted }: { onGetStarted: () => void }) => {
               { label: "Layout Preserved", value: "100%" },
             ].map((stat) => (
               <div key={stat.label} className="text-white">
-                <div className="text-2xl font-bold font-display">{stat.value}</div>
-                <div className="text-sm text-white/70">{stat.label}</div>
+                <div className="text-xl sm:text-2xl font-bold font-display">{stat.value}</div>
+                <div className="text-xs sm:text-sm text-white/70">{stat.label}</div>
               </div>
             ))}
           </motion.div>
