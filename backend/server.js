@@ -788,7 +788,7 @@ app.post('/api/translate-document', upload.single('file'), async (req, res) => {
           filePath,
           userEmail,
           originalFileName,
-          { type: 'original', fromLang, toLang, contentType: 'document', timestamp: timestamp.toString() }
+          { fromLang, toLang, contentType: 'document', timestamp: timestamp.toString() }
         );
         console.log('✅ Original uploaded:', originalKey);
         
@@ -797,7 +797,7 @@ app.post('/api/translate-document', upload.single('file'), async (req, res) => {
           outputPath,
           userEmail,
           translatedFileName,
-          { type: 'translated', fromLang, toLang, contentType: 'document', timestamp: timestamp.toString() }
+          { fromLang, toLang, contentType: 'document', timestamp: timestamp.toString() }
         );
         console.log('✅ Translated uploaded:', translatedKey);
         

@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import fs from 'fs';
 import path from 'path';
@@ -14,7 +14,7 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 const AWS_REGION = process.env.AWS_REGION || 'ap-south-1';
 const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
 const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
-const S3_BUCKET = process.env.AWS_S3_BUCKET || 'indiantranslator-documents';
+const S3_BUCKET = process.env.S3_BUCKET_NAME || process.env.AWS_S3_BUCKET || 'indiantranslator-documents';
 
 console.log('S3 Service Configuration:');
 console.log('Region:', AWS_REGION);
@@ -286,7 +286,6 @@ async function listUserDocumentsS3(userEmail) {
     // Now fetch metadata only for successfully paired documents (much faster)
     if (processed.length > 0) {
       console.log('  - Fetching metadata for paired documents...');
-      const { HeadObjectCommand } = await import('@aws-sdk/client-s3');
       
       for (const doc of processed) {
         try {
